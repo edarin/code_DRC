@@ -21,8 +21,6 @@ census_clust <- readOGR("Dropbox/data/in/microcensusCluster/",
                        "Microcensus_cluster_polygons")
 
 # 1. Focus on Bandundu
-#####
-
 # Drop Kinshasa
 boundaries <- boundaries[boundaries@data$name != 'Kinshasa',]
 
@@ -32,14 +30,7 @@ id <- rep(mean(coords[,1]),3)
 boundaries <- unionSpatialPolygons(boundaries, id)
 plot(boundaries)
 
-      # do we need to merge also the data part ?
-
-# 2. Merge census data -> not workking yet (see here - https://cran.r-project.org/web/packages/maptools/vignettes/combine_maptools.pdf)
-
-census_res <- SpatialPoints(census_res)
-census_nonres <- SpatialPoints(census_res)
-census <- spRbind(census_clus, census_nonres)
-
+# 2. Merge census data
 # Create dummy to track original dataset
 census_res@data$res_status = "darkgreen"
 census_nonres@data$res_status = "orange"
