@@ -1,23 +1,33 @@
 ##### Load libraries
-library(rgdal)
-library(maptools)
-library(dplyr)
-library(sp)
+
+# Function to load and install if required
+ipak <- function(pkg){
+  new.pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
+  if (length(new.pkg)) 
+    install.packages(new.pkg, dependencies = TRUE)
+  sapply(pkg, require, character.only = TRUE)
+}
+
+# usage
+packages <- c("rgdal", "maptools", "reshape2", "dplyr", "sp")
+ipak(packages)
+
 
 ##### Set working directory
-setwd("/Users/gianluca/") #Gianluca
+setwd("/Users/gianluca/Dropbox") #Gianluca
 setwd("/home/edarin/") #Édith
+setwd("C://Users//ecd1u18/Dropbox") # Edith windows
 getwd()
 
 ##### Import datasets
-boundaries <- readOGR("Dropbox/data/in/boundaries/", "boundaries_bandunduKinshasa")
+boundaries <- readOGR("data/in/boundaries", "boundaries_bandunduKinshasa")
 
-census_res <- readOGR("Dropbox/data/in/eHealth/DRC_micocensus_Final.gdb/", 
+census_res <- readOGR("data/in/eHealth/DRC_micocensus_Final.gdb", 
                       "residential_buildings")
-census_nonres <- readOGR("Dropbox/data/in/eHealth/DRC_micocensus_Final.gdb/", 
+census_nonres <- readOGR("data/in/eHealth/DRC_micocensus_Final.gdb", 
                          "non_residential_buildings")
 
-census_clust <- readOGR("Dropbox/data/in/microcensusCluster/", 
+census_clust <- readOGR("data/in/microcensusCluster", 
                        "Microcensus_cluster_polygons")
 
 # 1. Focus on Bandundu
