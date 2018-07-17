@@ -9,7 +9,9 @@ ipak <- function(pkg){
 }
 
 # usage
-packages <- c("rgdal", "maptools", "spatialEco", "dplyr", "sp", "gpclib", "stringr")
+packages <- c("rgdal", "maptools", "spatialEco", 
+              "dplyr", "sp", "gpclib", "rgeos",
+              'tmap')
 ipak(packages)
 
 
@@ -84,11 +86,54 @@ census_full@data %>%  filter(is.na(mez_id)) %>% group_by(cluster_id) %>% summari
 census_bandundu = census_full
 census_bandundu = point.in.poly(census_bandundu, boundaries)
 census_bandundu = census_bandundu[!is.na(census_bandundu$poly.ids),]
+#clust_bandandu = intersect(census_clust,boundaries) not sure required
 
 n=nrow(census_bandundu@data)
 census_bandundu_extract =census_bandundu[sample(1:n,50000, replace = F),]
 plot(census_bandundu_extract,pch =20, col=census_bandundu_extract@data$res_status, cex=0.3)
 plot( boundaries, add=TRUE)
+
+##### 3. Draw buffer
+buffer_size = 5 # for sensitivity study
+
+census_bandundu= spTransform(census_bandundu, CRS("+proj=utm +zone=34 +datum=WGS84 +units=m"))
+census_clust = spTransform(census_clust, CRS("+proj=utm +zone=34 +datum=WGS84 +units=m"))
+
+buffer = gBuffer(census_bandundu, width = buffer_size, byid=T)
+
+plot(buffer[2,])
+plot(census_bandundu[2,])
+
+###### test case: Maidombe 0076
+# Dissolve
+coords_buff = coordinates(test_cluster)
+id_buff = cut(coords_buff[,1], range(coords_buff[,1]), include.lowest=TRUE)
+test_cluster_diss = unionSpatialPolygons(test_cluster, id_buff)
+gArea(test_cluster_diss)
+
+
+plot(test_cluster)
+plot(test_cluster_diss, add=T, border = 'red')
+
+cluster_name='drc_maindombe_0076'
+test_cluster = buffer[which(buffer$mez_id == cluster_name),]
+plot(test_cluster)
+plot(census_bandundu[which(census_bandundu$mez_id == cluster_name),],
+     pch=20)
+
+tm_shape(census_clust[which(census_clust$mez_id == cluster_name),]) +
+  tm_fill()+
+  tm_shape(test_cluster) +
+  tm_bubbles(size=0.3, border.lwd = 0.1, alpha=0.5, 
+             col='building_type', title.col='Buildings visited',
+             palette= "Oranges") +
+  tm_legend()+
+  tm_layout('Test case: Maidombe 0076')
+
+
+
+
+
 
 
 # EXPLORATION SECTION
