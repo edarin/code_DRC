@@ -1,6 +1,7 @@
 ##### Load libraries
 
 # Function to load and install if required
+
 ipak <- function(pkg){
   new.pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
   if (length(new.pkg)) 
@@ -31,10 +32,11 @@ census_nonres <- readOGR("data/in/eHealth/DRC_micocensus_Final.gdb",
 
 census_clust <- readOGR("data/in/microcensusCluster", 
                         "Microcensus_cluster_polygons")
-
+########
 # 1. Handling SpatialPolygon
+########
 
-# Focus on Bandundu
+##### 1.1 Focus on Bandundu
 # Drop Kinshasa
 boundaries <- boundaries[boundaries@data$name != 'Kinshasa',]
 
@@ -44,9 +46,12 @@ id <- rep(median(coords[,1]),3)
 boundaries <- unionSpatialPolygons(boundaries, id)
 plot(boundaries)
 
+########
 # 2. Handling SpatialPoint (the census)
+########
 
-# 2.1 Merge census data
+##### 2.1 Merge census data
+
 # Create dummy to track original dataset
 census_res@data$res_status = "darkgreen"
 census_nonres@data$res_status = "orange"
@@ -64,8 +69,8 @@ plot(census_extract,pch =20, col=census_extract@data$res_status, cex=0.3)
 plot( boundaries, add=TRUE)
 
 
-# 2.2 Transer the attribute from the census_clus to census points 
-names_cluster = colnames(census_clust@data)
+##### 2.2 Transer the attribute from the census_clus to census points 
+rownames_cluster = colnames(census_clust@data)
 
 
 # First step: Spatial merge
@@ -75,13 +80,13 @@ census_full@data %>%  filter(is.na(mez_id)) %>% summarise(n())
 
 # second step: Dplyr merge
 census_clust$cluster_id = census_clust$mez_id
-df=census_full@data %>%  filter(is.na(mez_id)) %>% select(-names_cluster) %>% left_join(census_clust@data)
+df=census_full@data %>%  filter(is.na(mez_id)) %>% select(-rownames_cluster) %>% left_join(census_clust@data)
 census_full@data[is.na(census_full$mez_id),] = df
 census_full@data %>%  filter(is.na(mez_id))  %>% summarise(n())
 census_full@data %>%  filter(is.na(mez_id)) %>% group_by(cluster_id) %>% summarise(n())
 
 
-# 2.3 Drop Kinshasa observations
+#### 2.3 Drop Kinshasa observations
 
 census_bandundu = census_full
 census_bandundu = point.in.poly(census_bandundu, boundaries)
@@ -93,37 +98,81 @@ census_bandundu_extract =census_bandundu[sample(1:n,50000, replace = F),]
 plot(census_bandundu_extract,pch =20, col=census_bandundu_extract@data$res_status, cex=0.3)
 plot( boundaries, add=TRUE)
 
-##### 3. Draw buffer
-buffer_size = 5 # for sensitivity study
+#########
+# 3. Compute coverage
+############
+
+#### 3.1 Draw buffer
+bandundu_buffer_size = 5 # for sensitivity study
 
 census_bandundu= spTransform(census_bandundu, CRS("+proj=utm +zone=34 +datum=WGS84 +units=m"))
 census_clust = spTransform(census_clust, CRS("+proj=utm +zone=34 +datum=WGS84 +units=m"))
 
-buffer = gBuffer(census_bandundu, width = buffer_size, byid=T)
+bandundu_buffer = gBuffer(census_bandundu, width = bandundu_buffer_size, byid=T)
 
-plot(buffer[2,])
+plot(bandundu_buffer[2,])
 plot(census_bandundu[2,])
 
-###### test case: Maidombe 0076
-# Dissolve
-coords_buff = coordinates(test_cluster)
-id_buff = cut(coords_buff[,1], range(coords_buff[,1]), include.lowest=TRUE)
-test_cluster_diss = unionSpatialPolygons(test_cluster, id_buff)
-gArea(test_cluster_diss)
+##### 3.2
 
+# Drop NA
+bandundu_buffer = bandundu_buffer[!is.na(bandundu_buffer$mez_id),]
+# Comput
+compute_completeness = function(cluster_name){
 
-plot(test_cluster)
-plot(test_cluster_diss, add=T, border = 'red')
+  #select data
+  census = bandundu_buffer[which(bandundu_buffer$mez_id == cluster_name),]
+  border = census_clust[which(census_clust$mez_id == cluster_name),]
+  
+  #dissolve buffer
+  coords_buff = coordinates(census)
+  id_buff = cut(coords_buff[,1], range(coords_buff[,1]), include.lowest=TRUE)
+  census_diss = unionSpatialPolygons(census, id_buff)
+  
+  #compute proportion
+  prop = gArea(census_diss)/gArea(border)
 
+  output= prop
+  
+  return(output)
+}
+
+cluster_names = droplevels(bandundu_buffer@data %>% distinct(mez_id) %>% select(mez_id) %>%  unlist(use.names = FALSE))
+
+complete_prop = vector(length=nrow(census_clust@data))
+i=0
+for(name in cluster_names){
+  complete_prop[i]= compute_completeness(name)
+  
+  if(i%%10){
+    print(i)
+  }
+  i = i+1
+  
+}
+
+a=compute_completeness('drc_maindombe_0076')
+### Test case: Maidombe 0076
 cluster_name='drc_maindombe_0076'
-test_cluster = buffer[which(buffer$mez_id == cluster_name),]
-plot(test_cluster)
+test_case = bandundu_buffer[which(bandundu_buffer$mez_id == cluster_name),]
+test_case_border = census_clust[which(census_clust$mez_id == cluster_name),]
+
+# Dissolve
+coords_buff = coordinates(test_case)
+id_buff = cut(coords_buff[,1], range(coords_buff[,1]), include.lowest=TRUE)
+test_case_diss = unionSpatialPolygons(test_case, id_buff)
+prop = gArea(test_case_diss)/gArea(test_case_border)
+
+plot(test_case)
+plot(test_case_diss, add=T, border = 'red')
+
+
 plot(census_bandundu[which(census_bandundu$mez_id == cluster_name),],
      pch=20)
 
-tm_shape(census_clust[which(census_clust$mez_id == cluster_name),]) +
+tm_shape(test_case_border) +
   tm_fill()+
-  tm_shape(test_cluster) +
+  tm_shape(test_case) +
   tm_bubbles(size=0.3, border.lwd = 0.1, alpha=0.5, 
              col='building_type', title.col='Buildings visited',
              palette= "Oranges") +
