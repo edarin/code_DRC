@@ -9,7 +9,7 @@ ipak <- function(pkg){
 }
 
 # usage
-packages <- c("rgdal", "maptools", "spatialEco", "dplyr", "sp")
+packages <- c("rgdal", "maptools", "spatialEco", "dplyr", "sp", "gpclib", "stringr")
 ipak(packages)
 
 
@@ -28,19 +28,23 @@ census_nonres <- readOGR("data/in/eHealth/DRC_micocensus_Final.gdb",
                          "non_residential_buildings")
 
 census_clust <- readOGR("data/in/microcensusCluster", 
-                       "Microcensus_cluster_polygons")
+                        "Microcensus_cluster_polygons")
 
-# 1. Focus on Bandundu
+# 1. Handling SpatialPolygon
+
+# Focus on Bandundu
 # Drop Kinshasa
 boundaries <- boundaries[boundaries@data$name != 'Kinshasa',]
 
 # Merge the three regions
 coords <- coordinates(boundaries)
-id <- rep(mean(coords[,1]),3)
+id <- rep(median(coords[,1]),3)
 boundaries <- unionSpatialPolygons(boundaries, id)
 plot(boundaries)
 
-# 2. Merge census data
+# 2. Handling SpatialPoint (the census)
+
+# 2.1 Merge census data
 # Create dummy to track original dataset
 census_res@data$res_status = "darkgreen"
 census_nonres@data$res_status = "orange"
@@ -58,7 +62,7 @@ plot(census_extract,pch =20, col=census_extract@data$res_status, cex=0.3)
 plot( boundaries, add=TRUE)
 
 
-#Transer the attribute from the census_clus to census points 
+# 2.2 Transer the attribute from the census_clus to census points 
 names_cluster = colnames(census_clust@data)
 
 
@@ -72,9 +76,20 @@ census_clust$cluster_id = census_clust$mez_id
 df=census_full@data %>%  filter(is.na(mez_id)) %>% select(-names_cluster) %>% left_join(census_clust@data)
 census_full@data[is.na(census_full$mez_id),] = df
 census_full@data %>%  filter(is.na(mez_id))  %>% summarise(n())
-census_full@data %>%  filter(is.na(mez_id)) %>% distinct(cluster_id) %>% summarise(n())
+census_full@data %>%  filter(is.na(mez_id)) %>% group_by(cluster_id) %>% summarise(n())
 
-census_full@data %>%  filter(is.na(mez_id)) %>% View()
+
+# 2.3 Drop Kinshasa observations
+
+census_bandundu = census_full
+census_bandundu = point.in.poly(census_bandundu, boundaries)
+census_bandundu = census_bandundu[!is.na(census_bandundu$poly.ids),]
+
+n=nrow(census_bandundu@data)
+census_bandundu_extract =census_bandundu[sample(1:n,50000, replace = F),]
+plot(census_bandundu_extract,pch =20, col=census_bandundu_extract@data$res_status, cex=0.3)
+plot( boundaries, add=TRUE)
+
 
 # EXPLORATION SECTION
 
@@ -94,7 +109,7 @@ idx.spt.m =census_full@data %>%  filter(!is.na(mez_id))  %>% select(index)%>% un
 idx.m.intersect = intersect(idx.mrg.m, idx.spt.m)
 
 all.equal(merge[idx.m.intersect,],census_full@data[idx.m.intersect,]) 
-        # for merged items same result -> comforting
+# for merged items same result -> comforting
 
 # Idea: using two steps of merge, first spatial than dplyr
 
