@@ -27,9 +27,11 @@ It corresponds to 20 clusters unidentified:
 `````
 
 ### Section 3: Check for micro-census coverage
-![](./pic/test_case_completness.png)
+**Idea**: we want to know if surveyed areas, ie clusters,  were fully covered by the surveyors, for sampling bias and density computation.
+![](./pic/kwango_census.png)
 
-###### Drawing buffer around observations
+#### Drawing buffer around observations
+![](./pic/buffer.png)
 
 **Idea:** GPS points are not completely exact. We add a relative incertitute to data by drawing a buffer around each points.
 
@@ -39,4 +41,35 @@ It corresponds to 20 clusters unidentified:
 - study the sensitivty of the result to this parameter.
 
 
-###### Compute the proportion of covered area
+#### Compute the proportion of covered area
+
+##### 1. The denominator
+
+We considered only the builded areas in the cluster, using onrl settlement layer.
+![](./pic/kwango_raster.png)
+
+And then adding up the pixels in red.
+
+##### 2. The numerator
+
+We overlay the census data buffered and pick only pixels where there is at least one observation.
+
+![](./pic/kwangu_points.png)
+
+Proportion results in dividing the pixels surveyed by the pixels in the builded areas.
+
+###### 3. Results
+```
+   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+0.03846 0.83333 1.00000 0.90479 1.00000 1.00000
+```
+![alt text](./pic/hist_completed.png)
+
+
+**Sensitivity analyses**
+
+For a buffer of 1 meter | For a buffer of 10 meters
+--------------------- | ---------------------------
+   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. |  Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+0.03846 0.80000 1.00000 0.88526 1.00000 1.00000 |0.03846 0.87500 1.00000 0.92118 1.00000 1.00000 
+![alt text](./pic/hist_buffer1.png) | ![alt text](./pic/hist_buffer10.png)
