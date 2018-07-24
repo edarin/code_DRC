@@ -45,6 +45,7 @@ crs_utm = '+proj=utm +zone=34 +datum=WGS84 +units=m'
 ##### 1.1 Focus on Bandundu
 # Drop Kinshasa
 boundaries <- boundaries[boundaries@data$name != 'Kinshasa',]
+census_clust <- census_clust[census_clust@data$province != 'Kinshasa',]
 
 # Merge the three regions
 coords <- coordinates(boundaries)
@@ -115,7 +116,7 @@ plot(raster_bandundu)
 ############
 
 #### 3.1 Draw buffer
-buffer_bandundu_size = 5 # for sensitivity study
+buffer_bandundu_size = 10 # for sensitivity study
 
 census_bandundu= spTransform(census_bandundu, CRS(crs_utm))
 census_clust_utm = spTransform(census_clust, CRS(crs_utm))
@@ -124,26 +125,38 @@ buffer_bandundu = gBuffer(census_bandundu, width = buffer_bandundu_size, byid=T)
 
 plot(buffer_bandundu[2,])
 plot(census_bandundu[2,])
-
+ 
 ##### 3.2
 
 # Drop NA
 buffer_bandundu = buffer_bandundu[!is.na(buffer_bandundu$mez_id),]
-# Comput
+
+# Flag cluster without observation
+cluster_names = buffer_bandundu@data %>% distinct(mez_id) %>% select(mez_id)
+cluster_names$obs = TRUE
+cluster_theory = census_clust@data %>% distinct(mez_id) %>% select(mez_id)
+spot_missing_cluster = left_join(cluster_theory, cluster_names)
+spot_missing_cluster = droplevels(spot_missing_cluster %>% filter(is.na(obs)) %>% select(mez_id) %>% unlist(use.names = FALSE))
+cluster_names = droplevels(cluster_names$mez_id)                                 
+                                 
+# Coverage study
 raster_bandundu[is.na(raster_bandundu[])] <- 0 
 
-compute_completeness = function(cluster_name, buffer_bandundu = buffer_bandundu, plot =FALSE){
+compute_completeness = function(cluster_name, buffer = buffer_bandundu, plot =FALSE){
 
   #select data
-  census = buffer_bandundu[which(buffer_bandundu$mez_id == cluster_name),]
+  census = buffer[which(buffer$mez_id == cluster_name),]
   border = census_clust[which(census_clust$mez_id == cluster_name),]
   border_utm = census_clust_utm[which(census_clust_utm$mez_id == cluster_name),]
+  border_lines = SpatialLines(list(Lines(Line(geom(border)[,c('x','y')]), 'border_lines')), proj4string = CRS(crs_lglat))
   
   # find corresponding raster layer
-  raster = raster::crop(raster_bandundu, border)
-  rstz <- rasterize(border, raster)   
-  mask <- mask(x=raster, mask=rstz)
-  
+  raster = raster::crop(raster_bandundu, border, snap='out')
+  rstz_p <- rasterize(border, raster,field=1,background=0) #by lines
+  rstz_l <- rasterize(border_lines, raster,field=1,background=0) # by polygone centroids
+  rstz = rstz_l + rstz_p - rstz_l*rstz_p
+  mask <- mask(x=raster, mask=rstz, updatevalue = 0, updateNA=T, maskvalue=0)
+
   # compute denominator
   build_area = sum(mask@data@values, na.rm = T)*100*100
 
@@ -155,11 +168,11 @@ compute_completeness = function(cluster_name, buffer_bandundu = buffer_bandundu,
   
   
   #compute numerator
-  raster_surv = raster::intersect(mask,census_diss_wg)
-  raster_surv=extend(raster_surv, extent(mask))
-  raster_surv[is.na(raster_surv[])] <- 0 # this step takes time
+  raster_surv = raster::crop(raster_bandundu,census_diss_wg, snap='out')
+  raster_surv= raster::intersect(raster_surv, mask)
+  raster_surv=extend(raster_surv, mask, value =0)
   raster_unsurv= mask - raster_surv
-  unsurv = sum(raster_unsurv@data@values, na.rm = T)*100*100
+  unsurv = sum(raster_unsurv@data@values==1)*100*100
   
   #compute proportion
   prop = 1-unsurv/build_area
@@ -178,16 +191,15 @@ compute_completeness = function(cluster_name, buffer_bandundu = buffer_bandundu,
   return(output)
 }
 
-cluster_names = droplevels(buffer_bandundu@data %>% distinct(mez_id) %>% select(mez_id) %>%  unlist(use.names = FALSE))
 
-compute_completeness('drc_kwango_0098', plot = T)
+compute_completeness('drc_kwango_0097', plot = T)
 
   
 
 completed_prop = vector(length=length(cluster_names))
 i=1
 for(name in cluster_names){
-  completed_prop[i]= compute_completeness(name, buffer_bandundu = buffer_bandundu)
+  completed_prop[i]= compute_completeness(name, buffer = buffer_bandundu)
   
   if(i %%20 == 0){
     print(i)
@@ -197,9 +209,44 @@ for(name in cluster_names){
 }
 
 summary(completed_prop)
-hist(completed_prop, breaks = 50, col='orange', xlim=c(0,1) )
 worst_name = as.character(cluster_names[which(completed_prop == min(completed_prop))])
 compute_completeness(worst_name, plot=T)
+
+completed_prop = data.frame('cov_prop' = round(completed_prop,2), 'mez_id'=cluster_names)
+buffer_bandundu@data = left_join(buffer_bandundu@data, completed_prop)
+
+buffer_bandundu@data= buffer_bandundu@data %>% mutate(cov_grp = ifelse(cov_prop == 1, '100%', ifelse(cov_prop < 0.7, '14%-70%', 
+                                                                                 ifelse(cov_prop <0.8, '70%-80%', 
+                                                                                        ifelse(cov_prop < 0.9,'80%-90%' , 
+                                                                                               ifelse(cov_prop <1,'90%-100%', NA)) ))))
+buffer_bandundu$cov_grp= factor(buffer_bandundu$cov_grp, levels=c('14%-70%','70%-80%','80%-90%','90%-100%','100%'))
+
+
+hist(completed_prop, breaks = 100, col='purple', xlim=c(0,1), main= 'Distribution of coverage proportion' )
+
+tm_shape(boundaries) +
+  tm_fill()+
+  tm_shape(buffer_bandundu) +
+  tm_dots(size=0.1,   
+             col='cov_grp', title = 'Coverage percentage', palette='RdPu') +
+  tm_legend()+
+  tm_layout(title = 'Census coverage \n for each cluster', main.title.position= 'left',
+            legend.outside = T, legend.outside.position = 'right',
+            title.size	=2
+  )
+
+low_complete = buffer_bandundu@data %>% filter(cov_grp == '14%-70%')
+low_complete$interviewer_name = trim(low_complete$interviewer_name)
+low_complete %>% group_by(cov_prop,interviewer_name)  %>% distinct(cluster_id) %>% summarise(n())
+
+
+
+
+###########
+# Compute over sampled buildings
+###########
+
+
 
 #### sensitivity analysis to buffer size
 
@@ -218,7 +265,7 @@ for(name in cluster_names){
   
 }
 summary(completed_prop_1)
-hist(completed_prop_1, breaks = 50, col='orange' )
+hist(completed_prop_1, breaks = 10, col='orange' )
 
 #10m
 buffer_bandundu_10 = gBuffer(census_bandundu, width = 10, byid=T)
@@ -241,7 +288,7 @@ hist(completed_prop_10, breaks = 50, col='orange' )
 
 
 #### Test case: Kwango 0090
-cluster_name='drc_kwango_0090'
+cluster_name='drc_kwango_0091'
 test_case_census = census_bandundu[which(census_bandundu$mez_id == cluster_name),]
 test_case_buff = buffer_bandundu[which(buffer_bandundu$mez_id == cluster_name),]
 test_case_border = census_clust[which(census_clust$mez_id == cluster_name),]
@@ -256,8 +303,6 @@ coords_buff = coordinates(test_case_buff)
 id_buff = cut(coords_buff[,1], range(coords_buff[,1]), include.lowest=TRUE)
 test_case_diss = unionSpatialPolygons(test_case_buff, id_buff)
 
-plot(test_case)
-plot(test_case_diss, add=T, border = 'red')
 
 
 plot(census_bandundu[which(census_bandundu$mez_id == cluster_name),],
