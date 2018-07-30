@@ -15,7 +15,8 @@ The first issue leads us to missing data bias: the observation we get are actual
 The second ones overestimate the density by considering a smaller built area that in reality.
 
 **Schema and metrics**
-![](./pic/schema.jpg)
+![](./pic/schema.JPG)
+
 ## The study
 
 ### Coverage issue
