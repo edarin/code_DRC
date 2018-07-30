@@ -65,9 +65,9 @@ Histogram | Map
 Proportions:
 
 ````
-Coverage proportion distribution in 4 classes:
- 0%-60%  60%-80%  80%-90% 90%-100% 
-       9       34       75      292 
+Supplementary census proportion distribution in 4 classes:
+        0% 0.03%-0.4%    0.4%-1%      1%-3% 
+       253         88         56         13 
 ````
 ###### Worst case (>1% supplementary area surveyed - 10 cases)
 
