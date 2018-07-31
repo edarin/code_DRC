@@ -28,7 +28,7 @@ This metric is really conservative.
 **Results**
 
 ###### General overview
-Histogram | Map
+Map | Histogram
 ------------ | -------------------
 ![](./pic/map_cov_prop.png) | ![](./pic/hist_cov_prop.png)  
 
@@ -58,7 +58,7 @@ This depicts thus the supplementary cells surveyed from the one that were target
 **Results**
 
 ###### General overview
-Histogram | Map
+Map | Histogram
 ------------ | -------------------
 ![](./pic/map_supp.png) | ![](./pic/hist_supp.png)  
 
@@ -67,7 +67,7 @@ Proportions:
 ````
 Supplementary census proportion distribution in 4 classes:
         0% 0.03%-0.4%    0.4%-1%      1%-3% 
-       253         88         56         13 
+       253         95         52         10 
 ````
 ###### Worst case (>1% supplementary area surveyed - 10 cases)
 
@@ -88,3 +88,20 @@ Two possibilities:
 
 We can add as settlement area the cells on which were surveyed the building present in our census.
 
+## In practice
+
+##### Supplementary census
+
+![](./pic/comments.png)
+
+We've decided based on the previous picture that oversampled observation is not a big issue because:
+- first, based on the worst cases, we can see that oversampling just appears in a few cases,
+- second, it's mainly non-residential buildings that are surveyed outside the area considered as settled.
+
+##### Under coverage
+
+We investigated the difference in computed density, between using as denominator, the full area in settlement layer, or only the one surveyed.
+![](./pic/dens_boxplot.png)
+We have in average a difference of 3 people/km^2 with as outlier `drc_maindombe_0071`
+
+![Dens Outlier](pic/dens_outlier.png)

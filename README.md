@@ -66,6 +66,10 @@ In some clusters (118 out of 528), mostly in Kinshasa, we don't have correspondi
 [117] drc_kwango_0036    drc_kwango_0042   
 ```
 
+###### Non-residential building with census observations
+
+We have 73 people recorded in non-residential buildings. We discard them.
+
 ### Section 2: Check for micro-census coverage
 **Idea**: we want to know if surveyed areas, ie clusters,  were fully covered by the surveyors, for sampling bias and density computation.
 ![](./pic/kwango_census.png)
