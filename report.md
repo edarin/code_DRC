@@ -105,3 +105,7 @@ We investigated the difference in computed density, between using as denominator
 We have in average a difference of 3 people/km^2 with as outlier `drc_maindombe_0071`
 
 ![Dens Outlier](pic/dens_outlier.png)
+
+#### Results
+For this map, we use the density computed over the surveyed areas.
+![Map Density](pic/map_density.png)
