@@ -1,8 +1,8 @@
 ---
 title: "Study of census attributes in Bandundu"
 output:
-  html_document: default
   pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -78,6 +78,7 @@ tm_shape(boundaries) +
 
 ```{r }
 kable(census_res_geo@data %>% filter(status=='Incomplete', population>1) %>% select(cluster_id, building_type, number_of_household, population, comments,status  ))
+#census_res =census_res %>% mutate(cluster_id=replace(cluster_id, status=='Incomplete' & population >0, 'drc_maindombe_0062'))
 census_res =census_res %>% mutate(status=replace(status, status=='Incomplete' & population >0, 'Complete'))
 ```
 
@@ -99,7 +100,7 @@ census_res =census_res %>% filter(!(status=='Incomplete' & grepl(paste(pattern, 
 ```
 
 #### 3. Duplicate of completed observations
-*Situation*: Sometimes when the surveyor came back to the household, he didn't reopen the previous incomplete form such that for the same building we got two ids and two surveys, one completed and one incompleted (the first one in time). To flag it we based our analysis on the GPS coordinates (5 digits accuracy for the longitude, 6 for the lattitude), two buildings having the same coordinates were considered as the same. 
+*Situation*: Sometimes when the surveyor came back to the household, he/she didn't reopen the previous incomplete form such that for the same building we got two ids and two surveys, one completed and one incompleted (the first one in time). To flag it we based our analysis on the GPS coordinates (5 digits accuracy for the longitude, 6 for the lattitude), two buildings having the same coordinates were considered as the same. 
 
 *Solution*: we remove these incomplete observations. Concerns **9** observations
 ```{r}
@@ -140,5 +141,76 @@ tm_shape(boundaries) +
   tm_layout(title = 'Survey status', main.title.position= 'left',
             legend.outside = T, legend.outside.position = 'right')
 ```
+
+### Section 3 Caracteristics of incomplete survey
+
+#### Brief description
+For the remaining incomplete observations: we have information about:
+- the number of floors (all at 1 except one at 174 considered as irrelevant outlier)
+- the number of household in the building (all 1 except one at 2)
+
+but no more. We have no other information for imputation.
+
+## Analysis of completed survey
+
+### Additional buildings surveyed
+when we look at the `household` dataset, we notice that 30 buildings have been surveyed without being in the `building` dataset. They were reported as `non-residential` (even though they are absent from the `building` dataset corresponding to the non-residential ones).
+
+What does it mean: we have more observations and we need to merge them with the others. It's possible because they have a building_id and a GPS coordinates. But we lacked the `comments`, the `interviewer_name`and the `number_of_floors` that are the information reported only at the building level.
+
+
+
+```{r}
+# Spot additional obs in the household dataset 
+#   (ie building id not in the completed obs of the building dataset)
+building_id = census_res$building_id
+hh_building_id =df_hh %>% distinct(building_id) %>% select(building_id) %>% unlist(use.names = F)
+supp_building =setdiff(hh_building_id, building_id)
+paste('Number of additional observations:', length(supp_building)) # 30 buildings that are not in the master data
+
+# Extract this additional data
+df_supp <- df_resident %>% filter(building_id %in% supp_building) %>% select(-c(age, migrant, gender, resident_id, resident_number))
+# Create from it their corresponding building observations
+# Unkown variables at building level
+df_supp <-df_supp %>% mutate(building_number=NA, building_type='residential',
+                             interviewer_name=NA,number_of_floors=NA,
+                             status='Complete', comments=NA)
+# Compute variable at building level
+#Number of households
+hh_nb_supp <- df_supp %>% group_by(building_id) %>% distinct(household_id) %>% summarise(calculated_no_household=n())
+#Number of people
+pop_supp <- df_supp %>% group_by(building_id) %>% summarise(population=n())
+#Number of migrants
+migr_supp <- df_migr %>% filter(building_id %in% supp_building) %>% group_by(building_id) %>% summarise(number_of_migrants=n())
+df_supp <- df_supp %>% left_join(hh_nb_supp) %>% 
+            left_join(migr_supp) %>% left_join(pop_supp) %>% select(-household_id) %>% 
+            filter(!duplicated(building_id)) 
+df_supp$number_of_household=df_supp$calculated_no_household
+
+# Merge it to the already existing building dataset
+coords_supp <- lapply(df_supp %>% select(longitude,latitude), function(x) as.numeric(as.character(x)))
+coords <- data.frame(coordinates(census_res_geo))
+colnames(coords) <- c('longitude', 'latitude')
+coords <- rbind(coords, coords_supp)
+census_res <- rbind(census_res,df_supp)
+census_res_geo <-  SpatialPointsDataFrame(coords, census_res,proj4string =  CRS(proj4string(census_res_geo)))
+paste('Final number of buildings surveyed:', nrow(census_res_geo@data))
+
+```
+
+### Flag incompleteness at household level
+We know the number of households that are supposed to live in the building from the `building` dataset and we know the number of households that have actually have been interviewed from the `household` dataset. We can thus flag buildings where not every household has been interviewed, information of prime importation for imputation purposes.
+
+*NB*: `calculated_no_household` and `number_of_household` differs only for one observation that is
+
+
+
+```{r}
+hh_nb <- df_resident %>% group_by(building_id) %>% distinct(household_id) %>% summarise(hh_obs=n())
+hh_complete= left_join(census_res, hh_nb) %>% mutate(nb_hh_incomp = as.integer(as.character(calculated_no_household)) - hh_obs )
+kable(hh_complete %>% filter(nb_hh_incomp!= 0) %>% select(-c(building_number,building_id,interviewer_name,number_of_household,longitude, latitude, number_of_migrants,status)))
+paste('Potential missing household observation:', nrow(hh_complete %>% filter(nb_hh_incomp!= 0)))
+```
+
 
 
