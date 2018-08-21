@@ -1,0 +1,144 @@
+---
+title: "Study of census attributes in Bandundu"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir="C://Users//ecd1u18/Dropbox")
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE)
+```
+```{r include=FALSE}
+ipak <- function(pkg){
+  new.pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
+  if (length(new.pkg)) 
+    install.packages(new.pkg, dependencies = TRUE)
+  sapply(pkg, require, character.only = TRUE)
+}
+
+packages <- c("rgdal", "maptools", "spatialEco", 'MASS','tidyr',
+              "raster", "sp", "gpclib", "rgeos",
+              'tmap', 'dplyr', 'gsubfn', 'knitr')
+ipak(packages)
+
+
+df_resident <- sf::st_read(dsn = "data/in/eHealth/DRC_micocensus_Final.gdb",
+                  layer = "residents")
+df_hh <- sf::st_read(dsn = "data/in/eHealth/DRC_micocensus_Final.gdb",
+                           layer = "household_data")
+df_migr <- sf::st_read(dsn = "data/in/eHealth/DRC_micocensus_Final.gdb",
+                           layer = "migrants")
+census_res_geo <- readOGR("data/in/eHealth/DRC_micocensus_Final.gdb", 
+                      "residential_buildings")
+census_clust <- readOGR("data/in/microcensusCluster", 
+                        "Microcensus_cluster_polygons")
+boundaries <- readOGR("data/in/boundaries", "boundaries_bandunduKinshasa")
+```
+
+
+## Understanding incomplete survey
+
+### Section 1: Overview
+
+We study here the attributes of census observation in Bandundu that are reported as either `residential` or `mixte`. Our first concern goes to status of each observation, namely if it is completed or not. To do so let's understand what is under variable
+```{r}
+# In Bandundu
+cluster_names <- read.csv('data/in/cluster_names.csv', row.names = 1)
+census_res_geo <- census_res_geo[census_res_geo$cluster_id %in% cluster_names$mez_id,]
+# Residential or Mixte building type
+census_res_geo <- census_res_geo[census_res_geo$building_type %in% c('Residential', 'Mixed'),]
+# For all tables
+df_resident <- droplevels(df_resident[df_resident$cluster_id %in% cluster_names$mez_id,])
+building_name <- df_resident %>% distinct(building_id) %>% select(building_id) %>% unlist(use.names = F)
+df_hh <- droplevels(df_hh[df_hh$building_id %in% building_name,])
+df_migr <- droplevels(df_migr[df_migr$building_id %in% building_name,])
+
+census_res <- census_res_geo@data
+```
+```{r}
+kable(as.data.frame(table(census_res_geo$status,dnn='Status' ), responseName='Count'),caption = 'Survey status for each observation' )
+```
+```{r message=TRUE}
+tm_shape(boundaries) +
+  tm_fill()+
+  tm_shape(census_res_geo) +
+  tm_dots(size=0.1,   
+          col='status', title = 'Survey status \n (all building types)', palette = 'PiYG') +
+  tm_legend()+
+  tm_layout(title = 'Survey status', main.title.position= 'left',
+            legend.outside = T, legend.outside.position = 'right')
+```
+
+### Section 2: Sources of false incompleteness 
+#### 1. False report in `Survey_status`
+*Situation*: Here we have on observation reported as `incomplete` but with household information filled and "nothing to report" on the `Comment` section. 
+
+*Solution*: We change it to `complete`. Concerns **1** observation.
+
+```{r }
+kable(census_res_geo@data %>% filter(status=='Incomplete', population>1) %>% select(cluster_id, building_type, number_of_household, population, comments,status  ))
+census_res =census_res %>% mutate(status=replace(status, status=='Incomplete' & population >0, 'Complete'))
+```
+
+
+
+
+#### 2. Irrelevant buildings
+*Situation*: as shown in the `comments`, some buildings reported as incomplete are actually not building that should contains people. Example: buildings reported abandonned, toilets, non occupied etc.
+
+*Solution*: we remove them based on the pattern in the `Comments` section. Concerns **94** observations.
+
+```{r echo=TRUE}
+pattern = c('on occup', 'Abandonn', 'vide', 'noccup',
+            "existe plus",'En construction','Boutique','habit',
+            'Douche', 'Wc', 'detrui', 'toilette', 'Non occup',
+            'Cuisine', 'Abondonnee','Deplaement', 'occup','Inau')
+census_res =census_res %>% filter(!(status=='Incomplete' & grepl(paste(pattern, collapse = "|"),comments)))
+
+```
+
+#### 3. Duplicate of completed observations
+*Situation*: Sometimes when the surveyor came back to the household, he didn't reopen the previous incomplete form such that for the same building we got two ids and two surveys, one completed and one incompleted (the first one in time). To flag it we based our analysis on the GPS coordinates (5 digits accuracy for the longitude, 6 for the lattitude), two buildings having the same coordinates were considered as the same. 
+
+*Solution*: we remove these incomplete observations. Concerns **9** observations
+```{r}
+df_incomp <- census_res_geo@data[census_res_geo$status == 'Incomplete',]
+df_comp <- census_res_geo@data[census_res_geo$status == 'Complete',]
+
+incomp = data.frame(longitude=df_incomp$longitude,
+                    latitude=df_incomp$latitude,
+                    cluster_incomp = df_incomp$cluster_id,
+                    building_incomp=df_incomp$building_id,
+                    comments_incomp= df_incomp$comments)
+incomp$incomp = TRUE
+comp = data.frame(longitude=df_comp$longitude,
+                  latitude=df_comp$latitude,
+                  cluster_comp=df_comp$cluster_id,
+                  building_comp=df_comp$building_id,
+                  comments_comp= df_comp$comments)
+comp$comp = TRUE
+
+a=full_join(comp,incomp)
+
+id_false_incomp <- as.character(a %>%  filter(comp==TRUE & incomp==TRUE) %>% distinct(building_incomp) %>% select(building_incomp) %>% unlist(use.names = F))
+census_res = census_res %>% filter(!building_id %in% id_false_incomp) 
+```
+> Caveat: I'm not sure that this procedure is correct since in the full data table, there are 272 entries that have non-unique GPS coordinates.
+
+```{r}
+census_res_geo = census_res_geo[census_res_geo$building_id %in% census_res$building_id,]
+kable(as.data.frame(table(census_res_geo$status,dnn='Status' ), responseName='Count'),caption = 'Survey status for each observation after modifications' )
+```
+```{r message=TRUE}
+tm_shape(boundaries) +
+  tm_fill()+
+  tm_shape(census_res_geo) +
+  tm_dots(size=0.1,   
+          col='status', title = 'Survey status \n (all building types)', palette = 'PiYG') +
+  tm_legend()+
+  tm_layout(title = 'Survey status', main.title.position= 'left',
+            legend.outside = T, legend.outside.position = 'right')
+```
+
+
