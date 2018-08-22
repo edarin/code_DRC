@@ -1,8 +1,8 @@
 ---
 title: "Study of census attributes in Bandundu"
 output:
-  pdf_document: default
   html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -37,9 +37,9 @@ boundaries <- readOGR("data/in/boundaries", "boundaries_bandunduKinshasa")
 ```
 
 
-## Understanding incomplete survey
+## Part 1: Building level
 
-### Section 1: Overview
+### Section 1: Overview of incomplete observations
 
 We study here the attributes of census observation in Bandundu that are reported as either `residential` or `mixte`. Our first concern goes to status of each observation, namely if it is completed or not. To do so let's understand what is under variable
 ```{r}
@@ -142,7 +142,7 @@ tm_shape(boundaries) +
             legend.outside = T, legend.outside.position = 'right')
 ```
 
-### Section 3 Caracteristics of incomplete survey
+### Section 3: Caracteristics of incomplete survey
 
 #### Brief description
 For the remaining incomplete observations: we have information about:
@@ -151,9 +151,8 @@ For the remaining incomplete observations: we have information about:
 
 but no more. We have no other information for imputation.
 
-## Analysis of completed survey
 
-### Additional buildings surveyed
+### Section 4: Additional buildings surveyed
 when we look at the `household` dataset, we notice that 30 buildings have been surveyed without being in the `building` dataset. They were reported as `non-residential` (even though they are absent from the `building` dataset corresponding to the non-residential ones).
 
 What does it mean: we have more observations and we need to merge them with the others. It's possible because they have a building_id and a GPS coordinates. But we lacked the `comments`, the `interviewer_name`and the `number_of_floors` that are the information reported only at the building level.
@@ -198,7 +197,9 @@ paste('Final number of buildings surveyed:', nrow(census_res_geo@data))
 
 ```
 
-### Flag incompleteness at household level
+## Part 2: Household level 
+
+#### Flag incompleteness 
 We know the number of households that are supposed to live in the building from the `building` dataset and we know the number of households that have actually have been interviewed from the `household` dataset. We can thus flag buildings where not every household has been interviewed, information of prime importation for imputation purposes.
 
 *NB*: `calculated_no_household` and `number_of_household` differs only for one observation that is

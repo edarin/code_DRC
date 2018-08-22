@@ -125,10 +125,10 @@ $(document).ready(function () {
 </div>
 
 
-<div id="understanding-incomplete-survey" class="section level2">
-<h2>Understanding incomplete survey</h2>
-<div id="section-1-overview" class="section level3">
-<h3>Section 1: Overview</h3>
+<div id="part-1-building-level" class="section level2">
+<h2>Part 1: Building level</h2>
+<div id="section-1-overview-of-incomplete-observations" class="section level3">
+<h3>Section 1: Overview of incomplete observations</h3>
 <p>We study here the attributes of census observation in Bandundu that are reported as either <code>residential</code> or <code>mixte</code>. Our first concern goes to status of each observation, namely if it is completed or not. To do so let’s understand what is under variable</p>
 <table>
 <caption>Survey status for each observation</caption>
@@ -193,7 +193,7 @@ census_res =census_res %&gt;% filter(!(status=='Incomplete' &amp; grepl(paste(pa
 </div>
 <div id="duplicate-of-completed-observations" class="section level4">
 <h4>3. Duplicate of completed observations</h4>
-<p><em>Situation</em>: Sometimes when the surveyor came back to the household, he didn’t reopen the previous incomplete form such that for the same building we got two ids and two surveys, one completed and one incompleted (the first one in time). To flag it we based our analysis on the GPS coordinates (5 digits accuracy for the longitude, 6 for the lattitude), two buildings having the same coordinates were considered as the same.</p>
+<p><em>Situation</em>: Sometimes when the surveyor came back to the household, he/she didn’t reopen the previous incomplete form such that for the same building we got two ids and two surveys, one completed and one incompleted (the first one in time). To flag it we based our analysis on the GPS coordinates (5 digits accuracy for the longitude, 6 for the lattitude), two buildings having the same coordinates were considered as the same.</p>
 <p><em>Solution</em>: we remove these incomplete observations. Concerns <strong>9</strong> observations</p>
 <blockquote>
 <p>Caveat: I’m not sure that this procedure is correct since in the full data table, there are 272 entries that have non-unique GPS coordinates.</p>
@@ -222,6 +222,176 @@ census_res =census_res %&gt;% filter(!(status=='Incomplete' &amp; grepl(paste(pa
 </tbody>
 </table>
 </div>
+</div>
+<div id="section-3-caracteristics-of-incomplete-survey" class="section level3">
+<h3>Section 3: Caracteristics of incomplete survey</h3>
+<div id="brief-description" class="section level4">
+<h4>Brief description</h4>
+<p>For the remaining incomplete observations: we have information about: - the number of floors (all at 1 except one at 174 considered as irrelevant outlier) - the number of household in the building (all 1 except one at 2)</p>
+<p>but no more. We have no other information for imputation.</p>
+</div>
+</div>
+<div id="section-4-additional-buildings-surveyed" class="section level3">
+<h3>Section 4: Additional buildings surveyed</h3>
+<p>when we look at the <code>household</code> dataset, we notice that 30 buildings have been surveyed without being in the <code>building</code> dataset. They were reported as <code>non-residential</code> (even though they are absent from the <code>building</code> dataset corresponding to the non-residential ones).</p>
+<p>What does it mean: we have more observations and we need to merge them with the others. It’s possible because they have a building_id and a GPS coordinates. But we lacked the <code>comments</code>, the <code>interviewer_name</code>and the <code>number_of_floors</code> that are the information reported only at the building level.</p>
+<pre><code>## [1] &quot;Number of additional observations: 30&quot;</code></pre>
+<pre><code>## [1] &quot;Final number of buildings surveyed: 20849&quot;</code></pre>
+</div>
+</div>
+<div id="part-2-household-level" class="section level2">
+<h2>Part 2: Household level</h2>
+<div id="flag-incompleteness" class="section level4">
+<h4>Flag incompleteness</h4>
+<p>We know the number of households that are supposed to live in the building from the <code>building</code> dataset and we know the number of households that have actually have been interviewed from the <code>household</code> dataset. We can thus flag buildings where not every household has been interviewed, information of prime importation for imputation purposes.</p>
+<p><em>NB</em>: <code>calculated_no_household</code> and <code>number_of_household</code> differs only for one observation that is</p>
+<table>
+<thead>
+<tr class="header">
+<th align="left">cluster_id</th>
+<th align="left">building_type</th>
+<th align="left">number_of_floors</th>
+<th align="left">calculated_no_household</th>
+<th align="left">comments</th>
+<th align="right">population</th>
+<th align="right">hh_obs</th>
+<th align="right">nb_hh_incomp</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">drc_maindombe_0005</td>
+<td align="left">Residential</td>
+<td align="left">1</td>
+<td align="left">3</td>
+<td align="left">Ras</td>
+<td align="right">9</td>
+<td align="right">2</td>
+<td align="right">1</td>
+</tr>
+<tr class="even">
+<td align="left">drc_kwilu_0075</td>
+<td align="left">Residential</td>
+<td align="left">1</td>
+<td align="left">3</td>
+<td align="left">Erreur de ddoublement</td>
+<td align="right">4</td>
+<td align="right">1</td>
+<td align="right">2</td>
+</tr>
+<tr class="odd">
+<td align="left">drc_maindombe_0062</td>
+<td align="left">Residential</td>
+<td align="left">1</td>
+<td align="left">2</td>
+<td align="left">Ras</td>
+<td align="right">14</td>
+<td align="right">1</td>
+<td align="right">1</td>
+</tr>
+<tr class="even">
+<td align="left">drc_maindombe_0079</td>
+<td align="left">Residential</td>
+<td align="left">1</td>
+<td align="left">2</td>
+<td align="left">Ras</td>
+<td align="right">7</td>
+<td align="right">1</td>
+<td align="right">1</td>
+</tr>
+<tr class="odd">
+<td align="left">drc_maindombe_0079</td>
+<td align="left">Residential</td>
+<td align="left">1</td>
+<td align="left">2</td>
+<td align="left">Ras</td>
+<td align="right">5</td>
+<td align="right">1</td>
+<td align="right">1</td>
+</tr>
+<tr class="even">
+<td align="left">drc_kwilu_0075</td>
+<td align="left">Residential</td>
+<td align="left">1</td>
+<td align="left">3</td>
+<td align="left">Ras</td>
+<td align="right">4</td>
+<td align="right">1</td>
+<td align="right">2</td>
+</tr>
+<tr class="odd">
+<td align="left">drc_maindombe_0050</td>
+<td align="left">Residential</td>
+<td align="left">1</td>
+<td align="left">2</td>
+<td align="left">/Refus ( 2)</td>
+<td align="right">1</td>
+<td align="right">1</td>
+<td align="right">1</td>
+</tr>
+<tr class="even">
+<td align="left">drc_maindombe_0059</td>
+<td align="left">Residential</td>
+<td align="left">1</td>
+<td align="left">35</td>
+<td align="left">Ras</td>
+<td align="right">1</td>
+<td align="right">1</td>
+<td align="right">34</td>
+</tr>
+<tr class="odd">
+<td align="left">drc_maindombe_0026</td>
+<td align="left">Residential</td>
+<td align="left">1</td>
+<td align="left">2</td>
+<td align="left">Absence de personne mousse donner les informations</td>
+<td align="right">2</td>
+<td align="right">1</td>
+<td align="right">1</td>
+</tr>
+<tr class="even">
+<td align="left">drc_kwilu_0045</td>
+<td align="left">Residential</td>
+<td align="left">1</td>
+<td align="left">2</td>
+<td align="left">Ras</td>
+<td align="right">1</td>
+<td align="right">1</td>
+<td align="right">1</td>
+</tr>
+<tr class="odd">
+<td align="left">drc_maindombe_0028</td>
+<td align="left">Residential</td>
+<td align="left">1</td>
+<td align="left">2</td>
+<td align="left">Mnage et cuisine</td>
+<td align="right">1</td>
+<td align="right">1</td>
+<td align="right">1</td>
+</tr>
+<tr class="even">
+<td align="left">drc_maindombe_0059</td>
+<td align="left">Mixed</td>
+<td align="left">1</td>
+<td align="left">2</td>
+<td align="left">Deuxieme piece est une pallote</td>
+<td align="right">10</td>
+<td align="right">1</td>
+<td align="right">1</td>
+</tr>
+<tr class="odd">
+<td align="left">drc_kwilu_0075</td>
+<td align="left">Residential</td>
+<td align="left">1</td>
+<td align="left">2</td>
+<td align="left">Erreur de ddoublement</td>
+<td align="right">3</td>
+<td align="right">1</td>
+<td align="right">1</td>
+</tr>
+</tbody>
+</table>
+<pre><code>## [1] &quot;Potential missing household observation: 13&quot;</code></pre>
 </div>
 </div>
 
